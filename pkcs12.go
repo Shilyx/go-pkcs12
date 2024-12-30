@@ -608,7 +608,7 @@ func getSafeContents(p12Data, password []byte, expectedItemsMin int, expectedIte
 // better compatibility, use Legacy.Encode; for better
 // security, use Modern.Encode.
 func Encode(rand io.Reader, privateKey interface{}, certificate *x509.Certificate, caCerts []*x509.Certificate, password string) (pfxData []byte, err error) {
-	return LegacyRC2.WithRand(rand).Encode(privateKey, certificate, caCerts, password)
+	return LegacyRC2.WithRand(rand).Encode(privateKey, certificate, caCerts, password, false)
 }
 
 // Encode produces pfxData containing one private key (privateKey), an
@@ -624,7 +624,7 @@ func Encode(rand io.Reader, privateKey interface{}, certificate *x509.Certificat
 // private key shrouded with the key encryption algorithm.  The private key bag and
 // the end-entity certificate bag have the LocalKeyId attribute set to the SHA-1
 // fingerprint of the end-entity certificate.
-func (enc *Encoder) Encode(privateKey interface{}, certificate *x509.Certificate, caCerts []*x509.Certificate, password string) (pfxData []byte, err error) {
+func (enc *Encoder) Encode(privateKey interface{}, certificate *x509.Certificate, caCerts []*x509.Certificate, password string, keyOnly bool) (pfxData []byte, err error) {
 	if enc.macAlgorithm == nil && enc.certAlgorithm == nil && enc.keyAlgorithm == nil && password != "" {
 		return nil, errors.New("pkcs12: password must be empty")
 	}
@@ -694,7 +694,13 @@ func (enc *Encoder) Encode(privateKey interface{}, certificate *x509.Certificate
 	}
 
 	var authenticatedSafeBytes []byte
-	if authenticatedSafeBytes, err = asn1.Marshal(authenticatedSafe[:]); err != nil {
+	if authenticatedSafeBytes, err = asn1.Marshal(func() []contentInfo {
+		if (keyOnly) {
+			return authenticatedSafe[1:]
+		} else {
+			return authenticatedSafe[:]
+		}
+	}()); err != nil {
 		return nil, err
 	}
 
